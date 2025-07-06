@@ -60,6 +60,12 @@ namespace Solnet.Rpc.Models
         /// </remarks>
         /// </summary>
         public string[] Logs { get; set; }
+
+        /// <summary>
+        /// The number of compute units consumed during the simulation.
+        /// </summary>
+        [JsonPropertyName("unitsConsumed")]
+        public ulong UnitsConsumed { get; set; }
     }
 
     /// <summary>
@@ -71,6 +77,6 @@ namespace Solnet.Rpc.Models
         /// <summary>
         /// Represents the number of compute units consumed by the transactions.
         /// </summary>
-        public ulong UnitsConsumed { get; set; }
+        //public ulong UnitsConsumed { get; set; }
     }
 }
