@@ -299,7 +299,7 @@ namespace Solnet.Rpc
                     break;
                 case "programNotification":
                     var programNotification = JsonSerializer.Deserialize<JsonRpcStreamResponse<ResponseValue<AccountKeyPair>>>(ref reader, opts);
-                    result = programNotification.Result; 
+                    result = programNotification.Result;
                     break;
                 case "signatureNotification":
                     var signatureNotification = JsonSerializer.Deserialize<JsonRpcStreamResponse<ResponseValue<ErrorResult>>>(ref reader, opts);
@@ -309,6 +309,10 @@ namespace Solnet.Rpc
                 case "slotNotification":
                     var slotNotification = JsonSerializer.Deserialize<JsonRpcStreamResponse<SlotInfo>>(ref reader, opts);
                     result = slotNotification.Result;
+                    break;
+                case "blockNotification":
+                    var blockNotification = JsonSerializer.Deserialize<JsonRpcStreamResponse<BlockInfo>>(ref reader, opts);
+                    result = blockNotification.Result;
                     break;
                 case "rootNotification":
                     var rootNotification = JsonSerializer.Deserialize<JsonRpcStreamResponse<int>>(ref reader, opts);
@@ -450,8 +454,8 @@ namespace Solnet.Rpc
         /// <param name="dataSize"></param>
         /// <param name="memCmpList"></param>
         /// <returns></returns>
-        public async Task<SubscriptionState> SubscribeProgramAsync(string programPubkey, Action<SubscriptionState, 
-            ResponseValue<AccountKeyPair>> callback, Commitment commitment = Commitment.Finalized, int? dataSize = null, 
+        public async Task<SubscriptionState> SubscribeProgramAsync(string programPubkey, Action<SubscriptionState,
+            ResponseValue<AccountKeyPair>> callback, Commitment commitment = Commitment.Finalized, int? dataSize = null,
             IList<MemCmp> memCmpList = null)
         {
             List<object> filters = Parameters.Create(ConfigObject.Create(KeyValue.Create("dataSize", dataSize)));
@@ -462,7 +466,7 @@ namespace Solnet.Rpc
                     ConfigObject.Create(KeyValue.Create("offset", filter.Offset),
                         KeyValue.Create("bytes", filter.Bytes))))));
             }
-            
+
             List<object> parameters = Parameters.Create(
                 programPubkey,
                 ConfigObject.Create(
@@ -485,7 +489,7 @@ namespace Solnet.Rpc
         /// <param name="dataSize"></param>
         /// <param name="memCmpList"></param>
         /// <returns></returns>
-        public SubscriptionState SubscribeProgram(string programPubkey, Action<SubscriptionState, ResponseValue<AccountKeyPair>> callback, 
+        public SubscriptionState SubscribeProgram(string programPubkey, Action<SubscriptionState, ResponseValue<AccountKeyPair>> callback,
             Commitment commitment = Commitment.Finalized, int? dataSize = null, IList<MemCmp> memCmpList = null)
             => SubscribeProgramAsync(programPubkey, callback, commitment, dataSize, memCmpList).Result;
         #endregion
@@ -504,6 +508,48 @@ namespace Solnet.Rpc
         public SubscriptionState SubscribeSlotInfo(Action<SubscriptionState, SlotInfo> callback)
             => SubscribeSlotInfoAsync(callback).Result;
         #endregion
+
+
+        #region BlockInfo
+        /// <inheritdoc cref="IStreamingRpcClient.SubscribeBlockInfoAsync(string, Action{SubscriptionState, BlockInfo}, Commitment, string, string, int, bool)"/>
+        public Task<SubscriptionState> SubscribeBlockInfoAsync(string mentionsAccountOrProgram, Action<SubscriptionState, BlockInfo> callback, Commitment commitment = Commitment.Finalized, string encoding = "base64", string transactionDetails = "full", int maxSupportedTransactionVersion = 0, bool rewards = false)
+        {
+            var parameters = new List<object>(2);
+
+            var mentionParam = new Dictionary<string, object>
+            {
+                { "mentionsAccountOrProgram", mentionsAccountOrProgram }
+            };
+
+
+            var configParams = new Dictionary<string, object>
+            {
+                { "encoding", encoding },
+                { "transactionDetails", transactionDetails },
+                { "maxSupportedTransactionVersion", maxSupportedTransactionVersion },
+                { "rewards", rewards }
+            };
+
+
+            if (commitment != Commitment.Finalized)
+            {
+                configParams.Add("commitment", commitment);
+            }
+
+            parameters.Add(mentionParam);
+            parameters.Add(configParams);
+
+            var sub = new SubscriptionState<BlockInfo>(this, SubscriptionChannel.Block, callback, parameters);
+
+            var msg = new JsonRpcRequest(_idGenerator.GetNextId(), "blockSubscribe", parameters);
+            return Subscribe(sub, msg);
+        }
+
+        /// <inheritdoc cref="IStreamingRpcClient.SubscribeBlockInfo(string, Action{SubscriptionState, BlockInfo}, Commitment, string, string, int, bool)"/>
+        public SubscriptionState SubscribeBlockInfo(string mentionsAccountOrProgram, Action<SubscriptionState, BlockInfo> callback, Commitment commitment = Commitment.Finalized, string encoding = "base64", string transactionDetails = "full", int maxSupportedTransactionVersion = 0, bool rewards = false)
+            => SubscribeBlockInfoAsync(mentionsAccountOrProgram, callback, commitment, encoding, transactionDetails, maxSupportedTransactionVersion, rewards).Result;
+        #endregion
+
 
         #region Root
         /// <inheritdoc cref="IStreamingRpcClient.SubscribeRootAsync(Action{SubscriptionState, int})"/>
@@ -569,6 +615,7 @@ namespace Solnet.Rpc
             SubscriptionChannel.Root => "rootUnsubscribe",
             SubscriptionChannel.Signature => "signatureUnsubscribe",
             SubscriptionChannel.Slot => "slotUnsubscribe",
+            SubscriptionChannel.Block => "blockUnsubscribe",
             _ => throw new ArgumentOutOfRangeException(nameof(channel), channel, "invalid message type")
         };
 
@@ -582,5 +629,7 @@ namespace Solnet.Rpc
 
         /// <inheritdoc cref="IStreamingRpcClient.Unsubscribe(SubscriptionState)"/>
         public void Unsubscribe(SubscriptionState subscription) => UnsubscribeAsync(subscription).Wait();
+
+
     }
 }

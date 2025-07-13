@@ -207,6 +207,123 @@ namespace Solnet.Rpc
 
 
         /// <summary>
+        /// Subscribes asynchronously to block notifications, with optional filtering and configuration.
+        /// Note: Unstable method (This subscription is considered unstable and is only available if the validator was started with the --rpc-pubsub-enable-block-subscription flag. The format of this subscription may change in the future)
+        /// </summary>
+        /// <param name="mentionsAccountOrProgram">
+        /// Filter criteria for the logs to receive results by account type. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>all</c> - include all transactions in block</description></item>
+        /// <item><description>A base-58 encoded public key string - return only transactions that mention the provided public key. If no mentions in a given block, then no notification will be sent.</description></item>
+        /// </list>
+        /// </param>
+        /// <param name="callback">The callback to handle block data notifications.</param>
+        /// <param name="commitment">
+        /// Optional. The state commitment to consider when querying the ledger state. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>confirmed</c></description></item>
+        /// <item><description><c>finalized</c> (default)</description></item>
+        /// </list>
+        /// <para>Describes how finalized a block is at that point in time. See Configuring State Commitment.</para>
+        /// <para><c>processed</c> is not supported.</para>
+        /// </param>
+        /// <param name="encoding">
+        /// Optional. Encoding format for each returned transaction. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>json</c> (default)</description></item>
+        /// <item><description><c>jsonParsed</c></description></item>
+        /// <item><description><c>base58</c></description></item>
+        /// <item><description><c>base64</c></description></item>
+        /// </list>
+        /// <para><c>jsonParsed</c> attempts to use program-specific instruction parsers for more human-readable data. If unavailable, falls back to regular JSON encoding.</para>
+        /// </param>
+        /// <param name="transactionDetails">
+        /// Optional. Level of transaction detail to return. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>full</c> (default)</description></item>
+        /// <item><description><c>accounts</c></description></item>
+        /// <item><description><c>signatures</c></description></item>
+        /// <item><description><c>none</c></description></item>
+        /// </list>
+        /// <para>If <c>accounts</c> is requested, transaction details only include signatures and an annotated list of accounts. Transaction metadata is limited to: fee, err, pre_balances, post_balances, pre_token_balances, and post_token_balances.</para>
+        /// </param>
+        /// <param name="maxSupportedTransactionVersion">
+        /// Optional. The maximum transaction version to return. Default is <c>0</c>.
+        /// <para>Currently, only <c>0</c> is valid. Setting to <c>0</c> allows fetching all transactions, including both Versioned and legacy transactions.</para>
+        /// <para>If omitted, only legacy transactions are returned; any versioned transaction will result in an error.</para>
+        /// </param>
+        /// <param name="rewards">
+        /// Optional. Whether to populate the rewards array. If not provided, rewards are included by default.
+        /// </param>
+        /// <returns>The task object representing the asynchronous operation, with a subscription state containing the subscription id (needed to unsubscribe).</returns>
+        Task<SubscriptionState> SubscribeBlockInfoAsync(
+            string mentionsAccountOrProgram,
+            Action<SubscriptionState, BlockInfo> callback,
+            Commitment commitment = Commitment.Finalized,
+            string encoding = "base64",
+            string transactionDetails = "full",
+            int maxSupportedTransactionVersion = 0,
+            bool rewards = false);
+
+        /// <summary>
+        /// Subscribes to block notifications, with optional configuration. This is a synchronous and blocking function.
+        /// </summary>
+        /// <param name="mentionsAccountOrProgram">
+        /// Filter criteria for the logs to receive results by account type. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>all</c> - include all transactions in block</description></item>
+        /// <item><description>A base-58 encoded public key string - return only transactions that mention the provided public key. If no mentions in a given block, then no notification will be sent.</description></item>
+        /// </list>
+        /// </param>
+        /// <param name="callback">The callback to handle block data notifications.</param>
+        /// <param name="commitment">
+        /// Optional. The state commitment to consider when querying the ledger state. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>confirmed</c></description></item>
+        /// <item><description><c>finalized</c> (default)</description></item>
+        /// </list>
+        /// <para>Describes how finalized a block is at that point in time. See Configuring State Commitment.</para>
+        /// <para><c>processed</c> is not supported.</para>
+        /// </param>
+        /// <param name="encoding">
+        /// Optional. Encoding format for each returned transaction. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>json</c> (default)</description></item>
+        /// <item><description><c>jsonParsed</c></description></item>
+        /// <item><description><c>base58</c></description></item>
+        /// <item><description><c>base64</c></description></item>
+        /// </list>
+        /// <para><c>jsonParsed</c> attempts to use program-specific instruction parsers for more human-readable data. If unavailable, falls back to regular JSON encoding.</para>
+        /// </param>
+        /// <param name="transactionDetails">
+        /// Optional. Level of transaction detail to return. Supported values:
+        /// <list type="bullet">
+        /// <item><description><c>full</c> (default)</description></item>
+        /// <item><description><c>accounts</c></description></item>
+        /// <item><description><c>signatures</c></description></item>
+        /// <item><description><c>none</c></description></item>
+        /// </list>
+        /// <para>If <c>accounts</c> is requested, transaction details only include signatures and an annotated list of accounts. Transaction metadata is limited to: fee, err, pre_balances, post_balances, pre_token_balances, and post_token_balances.</para>
+        /// </param>
+        /// <param name="maxSupportedTransactionVersion">
+        /// Optional. The maximum transaction version to return. Default is <c>0</c>.
+        /// <para>Currently, only <c>0</c> is valid. Setting to <c>0</c> allows fetching all transactions, including both Versioned and legacy transactions.</para>
+        /// <para>If omitted, only legacy transactions are returned; any versioned transaction will result in an error.</para>
+        /// </param>
+        /// <param name="rewards">
+        /// Optional. Whether to populate the rewards array. If not provided, rewards are included by default.
+        /// </param>
+        /// <returns>Returns a subscription state containing the subscription id (needed to unsubscribe).</returns>
+        SubscriptionState SubscribeBlockInfo(
+            string mentionsAccountOrProgram,
+            Action<SubscriptionState, BlockInfo> callback,
+            Commitment commitment = Commitment.Finalized,
+            string encoding = "base64",
+            string transactionDetails = "full",
+            int maxSupportedTransactionVersion = 0,
+            bool rewards = false);
+
+        /// <summary>
         /// Subscribes asynchronously to receive notifications anytime a new root is set by the validator.
         /// </summary>
         /// <param name="callback">The callback to handle data notifications.</param>
