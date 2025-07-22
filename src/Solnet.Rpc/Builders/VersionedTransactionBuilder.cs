@@ -62,18 +62,12 @@ namespace Solnet.Rpc.Builders
 
         public VersionedTransactionBuilder AddAddressTableLookup(Message.VersionedMessage.MessageAddressTableLookup lookup)
         {
-            if (_messageBuilder.AddressTableLookups == null)
-                _messageBuilder.AddressTableLookups = [];
-
             _messageBuilder.AddressTableLookups.Add(lookup);
             return this;
         }
 
         public VersionedTransactionBuilder AddAddressTableLookups(IEnumerable<Message.VersionedMessage.MessageAddressTableLookup> lookups)
         {
-            if (_messageBuilder.AddressTableLookups == null)
-                _messageBuilder.AddressTableLookups = [];
-
             _messageBuilder.AddressTableLookups.AddRange(lookups);
             return this;
         }

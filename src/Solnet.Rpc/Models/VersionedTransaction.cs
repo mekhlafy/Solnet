@@ -36,7 +36,7 @@ namespace Solnet.Rpc.Models
                 messageBuilder.AddInstruction(instruction);
             }
 
-            messageBuilder.AddressTableLookups = AddressTableLookups;
+            messageBuilder.AddressTableLookups.AddRange(AddressTableLookups);
 
             return messageBuilder.Build();
         }

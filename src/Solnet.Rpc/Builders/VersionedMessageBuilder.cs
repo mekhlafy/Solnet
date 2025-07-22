@@ -19,7 +19,7 @@ namespace Solnet.Rpc.Builders
         /// <summary>
         /// Address Table Lookups
         /// </summary>
-        public List<MessageAddressTableLookup> AddressTableLookups { get; set; }
+        public List<MessageAddressTableLookup> AddressTableLookups { get; private set; } = [];
         /// <summary>
         /// Account Keys
         /// </summary>
