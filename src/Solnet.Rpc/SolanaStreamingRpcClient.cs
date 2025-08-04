@@ -521,15 +521,13 @@ namespace Solnet.Rpc
                 { "mentionsAccountOrProgram", mentionsAccountOrProgram }
             };
 
-
             var configParams = new Dictionary<string, object>
             {
                 { "encoding", encoding },
                 { "transactionDetails", transactionDetails },
                 { "maxSupportedTransactionVersion", maxSupportedTransactionVersion },
-                { "rewards", rewards }
+                { "showRewards", rewards }  // Changed from "rewards" to "showRewards"
             };
-
 
             if (commitment != Commitment.Finalized)
             {
