@@ -11,47 +11,98 @@ namespace Solnet.Programs
     /// Implements the Associated Token Account Program methods.
     /// <remarks>
     /// For more information see: https://spl.solana.com/associated-token-account
+    /// This refactor adds:
+    ///  - Token-2022 support (by parameterizing the token program id in derivation + creation)
+    ///  - Idempotent create (safe to include even if ATA already exists)
+    ///  - Backward-compatible legacy overloads
     /// </remarks>
     /// </summary>
     public static class AssociatedTokenAccountProgram
     {
         /// <summary>
-        /// The address of the Shared Memory Program.
+        /// The address of the Associated Token Account (ATA) Program.
         /// </summary>
         public static readonly PublicKey ProgramIdKey = new("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
         /// <summary>
-        /// The program's name.
+        /// Legacy SPL Token Program id (Tokenkeg...).
         /// </summary>
+        public static readonly PublicKey TokenProgramId = TokenProgram.ProgramIdKey;
+
+
+        /// <summary>
+        /// Token-2022 Program id (TokenzQd...).
+        /// </summary>
+        public static readonly PublicKey Token2022ProgramId = new("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
         private const string ProgramName = "Associated Token Account Program";
 
-        /// <summary>
-        /// The instruction's name.
-        /// </summary>
-        private const string InstructionName = "Create Associated Token Account";
+        private const string InstructionNameCreate = "Create Associated Token Account";
+        private const string InstructionNameCreateIdempotent = "Create Associated Token Account (Idempotent)";
 
         /// <summary>
-        /// Initialize a new transaction which interacts with the Associated Token Account Program to create
-        /// a new associated token account.
+        /// Initialize a new transaction which interacts with the ATA Program to create
+        /// a new associated token account (LEGACY behavior).
         /// </summary>
-        /// <param name="payer">The public key of the account used to fund the associated token account.</param>
-        /// <param name="owner">The public key of the owner account for the new associated token account.</param>
-        /// <param name="mint">The public key of the mint for the new associated token account.</param>
-        /// <returns>The transaction instruction, returns null whenever an associated token address could not be derived..</returns>
+        /// <remarks>
+        /// This is kept for backward compatibility. For new code, prefer
+        /// <see cref="CreateAssociatedTokenAccountIdempotent(PublicKey, PublicKey, PublicKey, PublicKey)"/>.
+        /// This overload assumes the legacy SPL Token program (Tokenkeg...).
+        /// </remarks>
         public static TransactionInstruction CreateAssociatedTokenAccount(PublicKey payer, PublicKey owner, PublicKey mint)
         {
-            PublicKey associatedTokenAddress = DeriveAssociatedTokenAccount(owner, mint);
+            var associatedTokenAddress = DeriveAssociatedTokenAccount(owner, mint, TokenProgramId);
 
-            if (associatedTokenAddress == null) return null;
+            var keys = new List<AccountMeta>(7)
+        {
+            AccountMeta.Writable(payer, true),
+            AccountMeta.Writable(associatedTokenAddress, false),
+            AccountMeta.ReadOnly(owner, false),
+            AccountMeta.ReadOnly(mint, false),
+            AccountMeta.ReadOnly(SystemProgram.ProgramIdKey, false),
+            AccountMeta.ReadOnly(TokenProgramId, false),
+            AccountMeta.ReadOnly(SysVars.RentKey, false)
+        };
 
-            List<AccountMeta> keys = new()
+            return new TransactionInstruction
             {
+                ProgramId = ProgramIdKey.KeyBytes,
+                Keys = keys,
+                Data = Array.Empty<byte>() // legacy create (non-idempotent)
+            };
+        }
+
+        /// <summary>
+        /// Initialize a new transaction which interacts with the ATA Program to create
+        /// a new associated token account using the IDEMPOTENT variant.
+        /// </summary>
+        /// <param name="payer">Account used to fund the associated token account (signer).</param>
+        /// <param name="owner">The owner of the associated token account.</param>
+        /// <param name="mint">The mint for the associated token account.</param>
+        /// <param name="tokenProgramId">
+        /// The token program that owns <paramref name="mint"/> (Tokenkeg... for legacy SPL, TokenzQd... for Token-2022).
+        /// </param>
+        /// <returns>The transaction instruction. Safe to include even if the ATA already exists.</returns>
+        public static TransactionInstruction CreateAssociatedTokenAccountIdempotent(
+            PublicKey payer,
+            PublicKey owner,
+            PublicKey mint,
+            PublicKey tokenProgramId)
+        {
+            var associatedTokenAddress = DeriveAssociatedTokenAccount(owner, mint, tokenProgramId);
+
+            // AToken "create idempotent" discriminator = 1 (single byte payload)
+            var data = new byte[] { 1 };
+
+            var keys = new List<AccountMeta>(7)
+            {
+                // Keep account order compatible with many clients and your previous fork
                 AccountMeta.Writable(payer, true),
                 AccountMeta.Writable(associatedTokenAddress, false),
                 AccountMeta.ReadOnly(owner, false),
                 AccountMeta.ReadOnly(mint, false),
                 AccountMeta.ReadOnly(SystemProgram.ProgramIdKey, false),
-                AccountMeta.ReadOnly(TokenProgram.ProgramIdKey, false),
+                AccountMeta.ReadOnly(tokenProgramId, false), // MUST match mint.owner (legacy or 2022)
                 AccountMeta.ReadOnly(SysVars.RentKey, false)
             };
 
@@ -59,46 +110,66 @@ namespace Solnet.Programs
             {
                 ProgramId = ProgramIdKey.KeyBytes,
                 Keys = keys,
-                Data = Array.Empty<byte>()
+                Data = data
             };
         }
 
         /// <summary>
-        /// Derive the public key of the associated token account for the
+        /// Convenience overload for legacy SPL Token (Tokenkeg...).
         /// </summary>
-        /// <param name="owner">The public key of the owner account for the new associated token account.</param>
-        /// <param name="mint">The public key of the mint for the new associated token account.</param>
-        /// <returns>The public key of the associated token account if it could be found, otherwise null.</returns>
-        public static PublicKey DeriveAssociatedTokenAccount(PublicKey owner, PublicKey mint)
+        public static TransactionInstruction CreateAssociatedTokenAccountIdempotent(
+            PublicKey payer,
+            PublicKey owner,
+            PublicKey mint) => CreateAssociatedTokenAccountIdempotent(payer, owner, mint, TokenProgramId);
+
+        /// <summary>
+        /// Derive the associated token account PDA for either legacy SPL Token or Token-2022.
+        /// </summary>
+        /// <param name="owner">Owner of the associated token account.</param>
+        /// <param name="mint">Mint of the associated token account.</param>
+        /// <param name="tokenProgramId">Token program that owns the mint (legacy or 2022).</param>
+        public static PublicKey DeriveAssociatedTokenAccount(PublicKey owner, PublicKey mint, PublicKey tokenProgramId)
         {
-            bool success = PublicKey.TryFindProgramAddress(
-                new List<byte[]> { owner.KeyBytes, TokenProgram.ProgramIdKey.KeyBytes, mint.KeyBytes },
-                ProgramIdKey, out PublicKey derivedAssociatedTokenAddress, out _);
-            return derivedAssociatedTokenAddress;
+            PublicKey.TryFindProgramAddress(
+                new[] { owner.KeyBytes, tokenProgramId.KeyBytes, mint.KeyBytes },
+                ProgramIdKey,
+                out var ata,
+                out _
+            );
+            return ata!;
         }
 
         /// <summary>
-        /// Decodes an instruction created by the Associated Token Account Program.
+        /// Legacy convenience overload (assumes legacy SPL token program).
         /// </summary>
-        /// <param name="data">The instruction data to decode.</param>
-        /// <param name="keys">The account keys present in the transaction.</param>
-        /// <param name="keyIndices">The indices of the account keys for the instruction as they appear in the transaction.</param>
-        /// <returns>A decoded instruction.</returns>
+        public static PublicKey DeriveAssociatedTokenAccount(PublicKey owner, PublicKey mint) =>
+            DeriveAssociatedTokenAccount(owner, mint, TokenProgramId);
+
+        /// <summary>
+        /// Decodes an instruction created by the ATA Program (supports both legacy create and idempotent).
+        /// </summary>
         public static DecodedInstruction Decode(ReadOnlySpan<byte> data, IList<PublicKey> keys, byte[] keyIndices)
         {
-            DecodedInstruction decodedInstruction = new()
+            // Note: different clients order accounts differently. This decoder assumes the order used above:
+            // [payer, associated, owner, mint, system_program, token_program, rent]
+            string name = data.Length == 1 && data[0] == 1 ? InstructionNameCreateIdempotent : InstructionNameCreate;
+
+            var decodedInstruction = new DecodedInstruction
             {
                 PublicKey = ProgramIdKey,
-                InstructionName = InstructionName,
+                InstructionName = name,
                 ProgramName = ProgramName,
                 Values = new Dictionary<string, object>
-                {
-                    {"Payer", keys[keyIndices[0]]},
-                    {"Associated Token Account Address", keys[keyIndices[1]]},
-                    {"Owner", keys[keyIndices[2]]},
-                    {"Mint", keys[keyIndices[3]]},
-                },
-                InnerInstructions = new List<DecodedInstruction>(),
+            {
+                {"Payer", keys[keyIndices[0]]},
+                {"Associated Token Account Address", keys[keyIndices[1]]},
+                {"Owner", keys[keyIndices[2]]},
+                {"Mint", keys[keyIndices[3]]},
+                {"System Program", keys[keyIndices[4]]},
+                {"Token Program", keys[keyIndices[5]]},
+                {"Rent Sysvar", keys[keyIndices[6]]},
+            },
+                InnerInstructions = new List<DecodedInstruction>()
             };
 
             return decodedInstruction;
